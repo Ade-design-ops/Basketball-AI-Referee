@@ -3,6 +3,7 @@ ultralytics>=8.0.0       # YOLOv8/v11 detection + tracking (ByteTrack built-in)
 opencv-python>=4.8.0
 numpy>=1.24.0
 torch>=2.0.0             # CPU build locally; swap for CUDA build on GPU machine
+mediapipe>=0.10.0        # pose estimation (CPU); swap for MMPose on GPU machine
 
 # API
 fastapi>=0.110.0
