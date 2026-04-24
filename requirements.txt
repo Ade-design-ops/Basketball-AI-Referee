@@ -1,0 +1,15 @@
+# Core ML / Vision
+ultralytics>=8.0.0       # YOLOv8/v11 detection + tracking (ByteTrack built-in)
+opencv-python>=4.8.0
+numpy>=1.24.0
+torch>=2.0.0             # CPU build locally; swap for CUDA build on GPU machine
+
+# API
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9
+
+# Utilities
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+loguru>=0.7.0

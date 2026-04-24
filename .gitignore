@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+data/raw/
+data/processed/
+*.pt
+*.onnx
+*.engine
+.env
