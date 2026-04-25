@@ -1,2 +1,2 @@
-# AI-Referee
-Saint
+# Basketball-AI-Referee
+AI powered Referee
