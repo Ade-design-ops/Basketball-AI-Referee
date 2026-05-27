@@ -165,6 +165,13 @@ Then click `Start Referee` and allow camera access.
 
 Use Docker to test the FastAPI backend in an Ubuntu 24.04 + Python 3.12 environment.
 
+Current verification status:
+
+- Docker backend image builds successfully.
+- Container starts the FastAPI server on port 8000.
+- YOLOv8n downloads and loads successfully inside the container.
+- `GET /health` returns `status: ok`, `ml_available: true`, and `demo_mode: false`.
+
 Build the image:
 
 ```bash
