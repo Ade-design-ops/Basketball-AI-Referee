@@ -60,6 +60,8 @@ Browser webcam
 |   |-- processed/
 |   `-- annotations/
 |-- notebooks/
+|-- Dockerfile
+|-- .dockerignore
 |-- requirements.txt
 `-- README.md
 ```
@@ -114,6 +116,8 @@ It:
 
 ## Local Setup
 
+The project was first developed locally with Python 3.10 on macOS. The Docker setup below is intended to test the backend on Ubuntu 24.04 with Python 3.12, which is closer to a fresh cloud VM/container.
+
 ### 1. Create and activate Python environment
 
 ```bash
@@ -156,6 +160,36 @@ http://localhost:3000
 ```
 
 Then click `Start Referee` and allow camera access.
+
+## Docker Backend
+
+Use Docker to test the FastAPI backend in an Ubuntu 24.04 + Python 3.12 environment.
+
+Build the image:
+
+```bash
+docker build -t basketball-ai-referee-backend .
+```
+
+Run the backend:
+
+```bash
+docker run --rm -p 8000:8000 basketball-ai-referee-backend
+```
+
+Check the backend:
+
+```text
+http://localhost:8000/health
+```
+
+This container runs the backend only. Run the frontend separately with:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
 ## Development Notes
 
@@ -202,7 +236,8 @@ Use commits as working checkpoints. Push to GitHub when the local code is stable
 
 ## Tech Stack
 
-- Python 3.10
+- Python 3.10 for local Mac development
+- Python 3.12 target test via Ubuntu 24.04 Docker
 - FastAPI
 - OpenCV
 - NumPy
