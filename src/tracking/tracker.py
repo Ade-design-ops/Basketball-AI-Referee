@@ -21,16 +21,34 @@ class PlayerTracker:
             self.model = None
             print("[!] Demo mode — simulated player tracking")
 
-    def track(self, frame: np.ndarray) -> list[dict]:
+    def track(self, frame: np.ndarray) -> tuple[list[dict], dict | None]:
         self.frame_count += 1
         if self.model is None:
             return self._demo_detections(frame)
 
-        results = self.model.track(frame, persist=True, conf=0.4, classes=[0], verbose=False)
-        detections = []
+        results = self.model.track(frame, persist=True, conf=0.4, classes=[0, 32], verbose=False, imgsz=320)
+        players = []
+        ball = None
 
-        if results[0].boxes is not None and results[0].boxes.id is not None:
+        if results[0].boxes is None:
+            return players, ball
+
+        # Extract ball from all detections (no persistent ID needed)
+        for box in results[0].boxes:
+            if int(box.cls[0]) == 32:
+                x1, y1, x2, y2 = [int(v) for v in box.xyxy[0].tolist()]
+                ball = {
+                    "bbox": [x1, y1, x2, y2],
+                    "center": [(x1 + x2) // 2, (y1 + y2) // 2],
+                    "conf": float(box.conf[0]),
+                }
+                break  # take highest-confidence ball
+
+        # Extract players (need persistent IDs for velocity)
+        if results[0].boxes.id is not None:
             for box, tid in zip(results[0].boxes, results[0].boxes.id):
+                if int(box.cls[0]) != 0:
+                    continue
                 x1, y1, x2, y2 = [int(v) for v in box.xyxy[0].tolist()]
                 tid = int(tid)
                 cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
@@ -46,19 +64,19 @@ class PlayerTracker:
 
                 self.prev_centers[tid] = (cx, cy)
                 self.velocities[tid] = [vx, vy]
-                detections.append({
+                players.append({
                     "track_id": tid,
                     "bbox": [x1, y1, x2, y2],
                     "conf": float(box.conf[0]),
                     "velocity": [vx, vy],
                 })
 
-        return detections
+        return players, ball
 
-    def _demo_detections(self, frame: np.ndarray) -> list[dict]:
+    def _demo_detections(self, frame: np.ndarray) -> tuple[list[dict], dict | None]:
         h, w = frame.shape[:2]
         t = self.frame_count * 0.05
-        return [
+        players = [
             {
                 "track_id": 1,
                 "bbox": [int(w * 0.3 + 30 * math.sin(t)), int(h * 0.4),
@@ -80,3 +98,11 @@ class PlayerTracker:
                 "velocity": [0.0, 0.0],
             },
         ]
+        bx = int(w * 0.4 + 60 * math.sin(t * 1.5))
+        by = int(h * 0.55 + 20 * abs(math.cos(t * 2)))
+        ball = {
+            "bbox": [bx - 12, by - 12, bx + 12, by + 12],
+            "center": [bx, by],
+            "conf": 0.9,
+        }
+        return players, ball

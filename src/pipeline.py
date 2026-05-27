@@ -1,4 +1,5 @@
 import base64
+import math
 import cv2
 import numpy as np
 from dataclasses import asdict
@@ -23,6 +24,31 @@ FOUL_BGR = {
 }
 
 
+DETECT_EVERY_N = 2  # run detection every Nth frame; reuse cached results in between
+
+
+def _ball_handler_id(detections: list[dict], ball: dict | None) -> int | None:
+    if not detections:
+        return None
+    if ball is None:
+        # no ball detected — fall back to fastest-moving player
+        return max(detections, key=lambda d: abs(d["velocity"][0]))["track_id"]
+    bx, by = ball["center"]
+    # prefer the player whose bbox contains the ball center
+    for det in detections:
+        x1, y1, x2, y2 = det["bbox"]
+        if x1 <= bx <= x2 and y1 <= by <= y2:
+            return det["track_id"]
+    # otherwise nearest player center to ball
+    return min(
+        detections,
+        key=lambda d: math.sqrt(
+            (bx - (d["bbox"][0] + d["bbox"][2]) / 2) ** 2 +
+            (by - (d["bbox"][1] + d["bbox"][3]) / 2) ** 2
+        ),
+    )["track_id"]
+
+
 class FrameProcessor:
     def __init__(self):
         self.tracker = PlayerTracker()
@@ -30,36 +56,35 @@ class FrameProcessor:
         self.detector = RuleBasedFoulDetector()
         self.frame_count = 0
         self.foul_log: list[FoulEvent] = []
-        self.POSE_EVERY_N = 3  # run pose estimation every 3rd frame for performance
+        self._cached_players: list[PlayerState] = []
+        self._cached_ball: dict | None = None
 
     def process(self, frame: np.ndarray) -> dict:
         self.frame_count += 1
+        run_detection = (self.frame_count % DETECT_EVERY_N == 0)
 
-        raw_detections = self.tracker.track(frame)
-
-        players: list[PlayerState] = []
-        for det in raw_detections:
-            kps = None
-            if self.estimator and (self.frame_count % self.POSE_EVERY_N == 0):
-                kps_arr = self.estimator.get_keypoints(frame, det["bbox"])
-                if kps_arr is not None:
-                    kps = kps_arr.tolist()
-
-            speed = abs(det["velocity"][0])
-            players.append(PlayerState(
-                track_id=det["track_id"],
-                bbox=det["bbox"],
-                keypoints=kps or [],
-                velocity=det["velocity"],
-                is_ball_handler=(
-                    speed == max((abs(d["velocity"][0]) for d in raw_detections), default=0)
-                ),
-            ))
+        if run_detection:
+            raw_detections, ball = self.tracker.track(frame)
+            handler_id = _ball_handler_id(raw_detections, ball)
+            players: list[PlayerState] = []
+            for det in raw_detections:
+                players.append(PlayerState(
+                    track_id=det["track_id"],
+                    bbox=det["bbox"],
+                    keypoints=[],
+                    velocity=det["velocity"],
+                    is_ball_handler=(det["track_id"] == handler_id),
+                ))
+            self._cached_players = players
+            self._cached_ball = ball
+        else:
+            players = self._cached_players
+            ball = self._cached_ball
 
         foul_events = self.detector.update(players)
         self.foul_log.extend(foul_events)
 
-        annotated = self._draw_overlays(frame.copy(), players, foul_events)
+        annotated = self._draw_overlays(frame.copy(), players, foul_events, ball)
         _, buf = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 70])
         frame_b64 = base64.b64encode(buf).decode()
 
@@ -70,6 +95,7 @@ class FrameProcessor:
             "foul_log": [asdict(ev) for ev in self.foul_log[-20:]],
             "frame_number": self.frame_count,
             "demo_mode": not ML_AVAILABLE,
+            "ball_detected": ball is not None,
         }
 
     def _draw_overlays(
@@ -77,6 +103,7 @@ class FrameProcessor:
         frame: np.ndarray,
         players: list[PlayerState],
         foul_events: list[FoulEvent],
+        ball: dict | None = None,
     ) -> np.ndarray:
         active_foul_ids = {pid for ev in foul_events for pid in ev.player_ids}
 
@@ -106,6 +133,11 @@ class FrameProcessor:
                 for px, py, vis in kp_pixels:
                     if vis > 0.3:
                         cv2.circle(frame, (px, py), 3, (255, 255, 100), -1)
+
+        if ball:
+            bx, by = ball["center"]
+            cv2.circle(frame, (bx, by), 12, (0, 140, 255), 2)
+            cv2.circle(frame, (bx, by), 3, (0, 200, 255), -1)
 
         for i, ev in enumerate(foul_events):
             foul_color = FOUL_BGR.get(ev.foul_type, (0, 0, 255))

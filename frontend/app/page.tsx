@@ -79,7 +79,7 @@ export default function Home() {
   }, []);
 
   const lastSendRef = useRef<number>(0);
-  const FRAME_INTERVAL = 150; // ms between sends (~7fps matches CPU inference speed)
+  const FRAME_INTERVAL = 80; // ms between sends (~12fps — faster now with smaller frames)
 
   const sendFrames = useCallback(() => {
     const video = webcamRef.current;
@@ -91,9 +91,15 @@ export default function Home() {
     if (now - lastSendRef.current >= FRAME_INTERVAL) {
       lastSendRef.current = now;
       const ctx = canvas.getContext("2d")!;
-      canvas.width = 640;
-      canvas.height = 480;
-      ctx.drawImage(video, 0, 0, 640, 480);
+      // use webcam's actual aspect ratio scaled down to ~320px wide
+      const scale = 320 / (video.videoWidth || 640);
+      canvas.width = Math.round((video.videoWidth || 640) * scale);
+      canvas.height = Math.round((video.videoHeight || 480) * scale);
+      // flip horizontally to correct mirror effect
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       canvas.toBlob((blob) => {
         if (!blob) return;
         const reader = new FileReader();
